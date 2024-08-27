@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S1 Class Friend Locator Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            font-family: 'Montserrat', sans-serif;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+            transition: width 0.3s ease;
+        }
+        .emoji-icon {
+            font-size: 24px;
+            text-align: center;
+            line-height: 24px;
+        }
+        .leaflet-tooltip {
+            background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(240,240,240,0.9) 100%);
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 3px 14px rgba(0,0,0,0.2);
+            color: #333;
+            font-family: 'Montserrat', sans-serif;
+            padding: 8px 12px;
+        }
+        .leaflet-tooltip-top:before {
+            border-top-color: rgba(255,255,255,0.9);
+        }
+        #name-banner {
+            position: fixed;
+            top: 0;
+            right: -250px;
+            width: 250px;
+            height: 100%;
+            background-color: white;
+            box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            border-top-left-radius: 15px;
+            border-bottom-left-radius: 15px;
+            overflow: hidden;
+        }
+        #name-banner.open {
+            right: 0;
+        }
+        #name-banner-content {
+            padding: 20px;
+            height: calc(100% - 40px);
+            overflow-y: auto;
+        }
+        #name-banner h2 {
+            text-align: center;
+            margin-top: 0;
+        }
+        #name-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        #name-list li {
+            margin-bottom: 10px;
+            cursor: pointer;
+            padding: 5px 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            transition: background-color 0.2s ease;
+        }
+        #name-list li:hover {
+            background-color: #e0e0e0;
+        }
+        #toggle-banner {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            z-index: 1001;
+            background: linear-gradient(45deg, #ff6b6b, #feca57);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: right 0.3s ease;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #toggle-banner:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+        .hamburger-icon {
+            display: block;
+            line-height: 1;
+        }
+        #close-banner {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            font-size: 20px;
+        }
+        #search-input {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .leaflet-container {
+            border: none !important;
+            outline: none !important;
+        }
+        @media (max-width: 768px) {
+            #name-banner {
+                width: 80%;
+                right: -80%;
+            }
+            #toggle-banner {
+                top: 5px;
+                right: 5px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="name-banner">
+        <div id="name-banner-content">
+            <h2>Classmates</h2>
+            <span id="close-banner">&times;</span>
+            <input type="text" id="search-input" placeholder="Search classmates...">
+            <ul id="name-list"></ul>
+        </div>
+    </div>
+    <button id="toggle-banner">
+        <span class="hamburger-icon">☰</span>
+    </button>
+    
+    
+    
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script>
+        // Initialize the map
+        const map = L.map('map', {
+            minZoom: 2,
+            maxBounds: [[-90, -180], [90, 180]],
+            maxBoundsViscosity: 1.0
+        }).setView([0, 0], 3);
+
+        // Add the OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            noWrap: true
+        }).addTo(map);
+
+        // Create a marker cluster group
+        const markers = L.markerClusterGroup({
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false,
+            zoomToBoundsOnClick: true
+        });
+
+        // Store friends' locations
+        const friends = [];
+
+        // Tooltip variants
+        const tooltipVariants = [
+            "is living the dream here!",
+            "calls this place home!",
+            "is thriving in this neighborhood!",
+            "has set up camp here!",
+            "is putting down roots here!"
+        ];
+
+        // Function to add a friend's location
+        function addFriend(name, lat, lng, emoji) {
+            const variant = tooltipVariants[Math.floor(Math.random() * tooltipVariants.length)];
+            const marker = L.marker([lat, lng], {
+                icon: L.divIcon({
+                    html: `<div class="emoji-icon">${emoji}</div>`,
+                    iconSize: [24, 24],
+                    iconAnchor: [12, 12],
+                    className: 'emoji-div-icon'
+                })
+            });
+            marker.bindTooltip(name, {direction: 'top', offset: [0, -10]});
+            marker.bindPopup(`<b>${name}</b> ${variant}`, {className: 'cool-popup'});
+            markers.addLayer(marker);
+            friends.push({ name, lat, lng, marker });
+            updateNameBanner();
+        }
+
+        // Event listener for map clicks
+        map.on('click', function(e) {
+            const name = prompt("What's your awesome name?");
+            if (name) {
+                const emoji = prompt("Choose your emoji (e.g., 😎, 🌟, 🦄, 💩):", "😎");
+                addFriend(name, e.latlng.lat, e.latlng.lng, emoji);
+            }
+        });
+
+        // Add the marker cluster group to the map
+        map.addLayer(markers);
+
+        // Cool welcome message
+        L.popup({className: 'custom-popup'})
+            .setLatLng([0, 0])
+            .setContent(`
+                <h3>Welcome to the S1 Class Friend Locator! 🎉</h3>
+                <p>Click anywhere to drop your emoji and show your classmates where you're living now. Let's see where everyone's adventures have taken them!</p>
+            `)
+            .openOn(map);
+
+        // Function to update emoji sizes based on zoom level
+        function updateEmojiSizes() {
+            const zoom = map.getZoom();
+            const size = Math.max(12, Math.min(24, zoom * 3)); // Adjust size based on zoom
+            document.querySelectorAll('.emoji-icon').forEach(el => {
+                el.style.fontSize = `${size}px`;
+                el.style.lineHeight = `${size}px`;
+            });
+        }
+
+        // Update emoji sizes on zoom
+        map.on('zoomend', updateEmojiSizes);
+
+        // Function to update the name banner
+        function updateNameBanner() {
+            const nameList = document.getElementById('name-list');
+            nameList.innerHTML = '';
+            friends.forEach(friend => {
+                const li = document.createElement('li');
+                li.textContent = friend.name;
+                li.addEventListener('click', () => {
+                    map.setView([friend.lat, friend.lng], 10);
+                    friend.marker.openPopup();
+                });
+                nameList.appendChild(li);
+            });
+        }
+
+        // Toggle name banner
+        const nameBanner = document.getElementById('name-banner');
+        const toggleButton = document.getElementById('toggle-banner');
+        const closeBanner = document.getElementById('close-banner');
+        let isBannerOpen = false;
+
+        function toggleBanner() {
+            isBannerOpen = !isBannerOpen;
+            nameBanner.classList.toggle('open', isBannerOpen);
+            toggleButton.style.right = isBannerOpen ? '260px' : '10px';
+            // Remove any line that changes the button content
+        }
+
+        toggleButton.addEventListener('click', toggleBanner);
+        closeBanner.addEventListener('click', toggleBanner);
+
+        // Search functionality
+        const searchInput = document.getElementById('search-input');
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const nameItems = document.querySelectorAll('#name-list li');
+            nameItems.forEach(item => {
+                if (item.textContent.toLowerCase().includes(searchTerm)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
